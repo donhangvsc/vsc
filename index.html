@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>App Lên Đơn</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;700;800;900&display=swap');
+    body {
+      font-family: "Be Vietnam Pro", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #eef8ff 0%, #f8fafc 100%);
+      overscroll-behavior-y: contain;
+    }
+    .glass-card {
+      background: rgba(255,255,255,0.92);
+      border-radius: 24px;
+      box-shadow: 0 10px 30px rgba(14, 165, 233, 0.08);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      backdrop-filter: blur(10px);
+    }
+    .bottom-nav {
+      background: rgba(255,255,255,0.98);
+      border-top: 1px solid rgba(148, 163, 184, 0.28);
+      box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(14px);
+    }
+    .nav-item {
+      min-width: 88px;
+      padding: 10px 8px;
+      border-radius: 18px;
+      color: #475569;
+      transition: all 0.18s ease;
+    }
+    .active-tab {
+      color: #0369a1;
+      font-weight: 900;
+      position: relative;
+      background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
+      box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.18);
+    }
+    .active-tab::after {
+      content: "";
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 26px;
+      height: 4px;
+      border-radius: 999px;
+      background: #0284c7;
+    }
+    .btn-press:active { transform: scale(0.98); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-up { animation: slideUp .28s ease-out forwards; }
+    .receipt-paper {
+      position: relative;
+      color: #111111;
+      background: #ffffff;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: hidden;
+      font-family: "Be Vietnam Pro", Inter, sans-serif;
+    }
+    .receipt-paper::before {
+      content: none;
+    }
+    .receipt-paper::after {
+      content: none;
+    }
+    .ink-title {
+      color: #111111;
+      letter-spacing: 0;
+      text-shadow: none;
+    }
+    .ink-subtle { color: #111111; }
+    .receipt-sep {
+      border-top: 2px dashed rgba(0, 0, 0, 0.7);
+    }
+    .receipt-dotted {
+      border-top: 2px dashed rgba(0, 0, 0, 0.45);
+    }
+    .receipt-flower {
+      display: none;
+    }
+    .receipt-rings {
+      display: none;
+    }
+    .receipt-ring {
+      display: none;
+    }
+    .receipt-note-block {
+      white-space: pre-line;
+      font-weight: 800;
+    }
+    .app-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      object-fit: cover;
+      border: 2px solid rgba(14, 165, 233, 0.14);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+      background: #ffffff;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    const APP_NAME = "App Lên Đơn";
+    const APP_LOGO = "./logo-app.jpeg";
+
+    const STORAGE_KEY = "solo_pos_local_v2";
+    const SETTINGS_KEY = "solo_pos_settings_v2";
+
+    const seedProducts = [
+      { id: 1, name: "Yến hũ cao cấp", price: 380000, stock: 12 },
+      { id: 2, name: "Hồng sâm 6 năm", price: 520000, stock: 8 },
+      { id: 3, name: "Đông trùng hạ thảo", price: 680000, stock: 6 },
+      { id: 4, name: "Tổ yến tinh chế", price: 950000, stock: 5 },
+      { id: 5, name: "Mật ong hoa nhãn", price: 185000, stock: 24 },
+      { id: 6, name: "Ngũ cốc dinh dưỡng", price: 145000, stock: 30 }
+    ];
+
+    const seedCustomers = [
+      { id: 1, name: "Khách lẻ", note: "Khách mua tại cửa hàng" },
+      { id: 2, name: "Chị Lan", note: "Khách quen, ưu tiên gọi trước khi giao" },
+      { id: 3, name: "Anh Phúc", note: "SĐT: 0909 123 456" }
+    ];
+
+    const seedSales = [
+      {
+        id: 1001,
+        customer: "Chị Lan",
+        note: "Giao trong chiều",
+        total: 705000,
+        date: new Date().toISOString(),
+        items: [
+          { id: "s1", name: "Mật ong hoa nhãn", qty: 1, originalPrice: 185000, appliedPrice: 185000, discountPercent: 0, note: "" },
+          { id: "s2", name: "Hồng sâm 6 năm", qty: 1, originalPrice: 520000, appliedPrice: 520000, discountPercent: 0, note: "" }
+        ]
+      }
+    ];
+
+    const defaultSettings = {
+      storeName: "KHÁNH CƯỜNG",
+      subtitle: "Bán hàng thông minh",
+      address: "Bình Phước",
+      phone: "0900 000 000",
+      primaryColor: "#0284c7",
+      appsScriptUrl: ""
+    };
+
+    const currency = (n) => `${Number(n || 0).toLocaleString("vi-VN")}đ`;
+    const moneyText = (n) => Number(n || 0).toLocaleString("vi-VN");
+    const orderCode = (id) => `HD${String(id || Date.now()).slice(-8).padStart(8, "0")}`;
+
+    const safeRead = (key, fallback) => {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
+    const HomeIcon = () => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 10.5 12 3l9 7.5V20a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 20z"></path>
+        <path d="M9 21V12h6v9"></path>
+      </svg>
+    );
+
+    const ChartIcon = () => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 20h16"></path>
+        <path d="M7 20v-7"></path>
+        <path d="M12 20V8"></path>
+        <path d="M17 20V4"></path>
+      </svg>
+    );
+
+    const SettingIcon = () => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.92 4.6H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c0 .66.39 1.26 1 1.51H21a2 2 0 1 1 0 4h-.09c-.61.25-1 .85-1 1.49z"></path>
+      </svg>
+    );
+
+    const PlusIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v14"></path>
+        <path d="M5 12h14"></path>
+      </svg>
+    );
+
+    const TrashIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="M18 6l-1 14H7L6 6"></path>
+      </svg>
+    );
+
+    const SyncIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 0 1 15.3-6.36L21 8"></path>
+        <path d="M21 3v5h-5"></path>
+        <path d="M21 12a9 9 0 0 1-15.3 6.36L3 16"></path>
+        <path d="M8 16H3v5"></path>
+      </svg>
+    );
+
+    const EyeIcon = () => (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>
+    );
+
+    function App() {
+      const initialData = safeRead(STORAGE_KEY, {
+        products: seedProducts,
+        customers: seedCustomers,
+        sales: seedSales
+      });
+
+      const [data, setData] = useState(initialData);
+      const [settings, setSettings] = useState(safeRead(SETTINGS_KEY, defaultSettings));
+      const [view, setView] = useState("pos");
+      const [cart, setCart] = useState([]);
+      const [customer, setCustomer] = useState("Khách lẻ");
+      const [orderNote, setOrderNote] = useState("");
+      const [searchProd, setSearchProd] = useState("");
+      const [searchCust, setSearchCust] = useState("");
+      const [selectingItem, setSelectingItem] = useState(null);
+      const [inputQty, setInputQty] = useState(1);
+      const [inputNote, setInputNote] = useState("");
+      const [showBill, setShowBill] = useState(false);
+      const [billImg, setBillImg] = useState(null);
+      const [previewOrder, setPreviewOrder] = useState(null);
+      const [loadingBill, setLoadingBill] = useState(false);
+      const [editingOrderId, setEditingOrderId] = useState(null);
+      const [syncingGoogle, setSyncingGoogle] = useState(false);
+      const [lastGoogleSync, setLastGoogleSync] = useState("");
+      const [showAddCust, setShowAddCust] = useState(false);
+      const [showAddProd, setShowAddProd] = useState(false);
+      const [newCust, setNewCust] = useState({ name: "", note: "" });
+      const [newProd, setNewProd] = useState({ name: "", price: "", stock: "" });
+      const [reportFilter, setReportFilter] = useState("today");
+      const [customDate, setCustomDate] = useState({ start: "", end: "" });
+      const [importText, setImportText] = useState("");
+      const [excelImportMode, setExcelImportMode] = useState("append");
+      const [customerImportMode, setCustomerImportMode] = useState("append");
+      const [message, setMessage] = useState("Đã sẵn sàng");
+      const receiptRef = useRef(null);
+      const excelInputRef = useRef(null);
+      const customerExcelInputRef = useRef(null);
+
+      useEffect(() => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }, [data]);
+
+      useEffect(() => {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }, [settings]);
+
+      const products = data.products || [];
+      const customers = data.customers || [];
+      const sales = data.sales || [];
+
+      const getPriceInfo = (price, note) => {
+        const match = String(note || "").match(/(\d+)\s*%/);
+        if (match) {
+          const discountPercent = Math.min(100, Math.max(0, Number(match[1])));
+          const finalPrice = Math.round(Number(price) * (1 - discountPercent / 100));
+          return { finalPrice, discountPercent };
+        }
+        return { finalPrice: Number(price), discountPercent: 0 };
+      };
+
+      const filteredProducts = useMemo(
+        () => products.filter((p) => p.name.toLowerCase().includes(searchProd.toLowerCase())),
+        [products, searchProd]
+      );
+
+      const matchedCustomers = useMemo(
+        () => customers.filter((c) => c.name.toLowerCase().includes(searchCust.toLowerCase())),
+        [customers, searchCust]
+      );
+
+      const totalAmount = cart.reduce((sum, item) => sum + item.appliedPrice * item.qty, 0);
+      const editingOrder = useMemo(
+        () => sales.find((sale) => sale.id === editingOrderId) || null,
+        [sales, editingOrderId]
+      );
+
+      const filteredStats = useMemo(() => {
+        const now = new Date();
+        const filtered = sales.filter((sale) => {
+          const saleDate = new Date(sale.date);
+          if (reportFilter === "today") return saleDate.toDateString() === now.toDateString();
+          if (reportFilter === "month") return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+          if (reportFilter === "year") return saleDate.getFullYear() === now.getFullYear();
+          if (reportFilter === "custom" && customDate.start && customDate.end) {
+            const start = new Date(customDate.start);
+            start.setHours(0,0,0,0);
+            const end = new Date(customDate.end);
+            end.setHours(23,59,59,999);
+            return saleDate >= start && saleDate <= end;
+          }
+          return reportFilter !== "custom";
+        });
+
+        const total = filtered.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+        const itemsSold = filtered.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + Number(item.qty || 0), 0), 0);
+        return { total, count: filtered.length, itemsSold, data: filtered };
+      }, [sales, reportFilter, customDate]);
+
+      const topProducts = useMemo(() => {
+        const map = {};
+        filteredStats.data.forEach((sale) => {
+          sale.items.forEach((item) => {
+            map[item.name] = (map[item.name] || 0) + Number(item.qty || 0);
+          });
+        });
+        return Object.entries(map)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5);
+      }, [filteredStats]);
+
+      const appsScriptUrl = String(settings.appsScriptUrl || "").trim();
+
+      const refreshDemo = () => {
+        setData({
+          products: seedProducts,
+          customers: seedCustomers,
+          sales: seedSales
+        });
+        setMessage("Đã nạp lại dữ liệu mẫu");
+      };
+
+      const addCustomer = () => {
+        if (!newCust.name.trim()) return;
+        setData((prev) => ({
+          ...prev,
+          customers: [{ id: Date.now(), name: newCust.name.trim(), note: newCust.note.trim() }, ...prev.customers]
+        }));
+        setNewCust({ name: "", note: "" });
+        setShowAddCust(false);
+        setMessage("Đã thêm khách hàng");
+      };
+
+      const addProduct = () => {
+        if (!newProd.name.trim() || !newProd.price) return;
+        setData((prev) => ({
+          ...prev,
+          products: [{
+            id: Date.now(),
+            name: newProd.name.trim(),
+            price: Number(newProd.price),
+            stock: Number(newProd.stock || 0)
+          }, ...prev.products]
+        }));
+        setNewProd({ name: "", price: "", stock: "" });
+        setShowAddProd(false);
+        setMessage("Đã thêm sản phẩm");
+      };
+
+      const normalizeHeader = (value) =>
+        String(value || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "");
+
+      const pickValueByAliases = (row, aliases) => {
+        const entries = Object.entries(row || {});
+        for (const [key, value] of entries) {
+          if (aliases.includes(normalizeHeader(key))) return value;
+        }
+        return "";
+      };
+
+      const readWorkbookRows = async (file) => {
+        const buffer = await file.arrayBuffer();
+        const workbook = window.XLSX.read(buffer, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        return window.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+      };
+
+      const handleExcelFile = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!window.XLSX) {
+          setMessage("Chưa tải được thư viện đọc Excel");
+          event.target.value = "";
+          return;
+        }
+
+        try {
+          const rows = await readWorkbookRows(file);
+
+          const parsedProducts = rows
+            .map((row, index) => {
+              const name = pickValueByAliases(row, ["ten", "tensp", "tensanpham", "sanpham", "name", "product", "productname"]);
+              const priceRaw = pickValueByAliases(row, ["gia", "giaban", "dongia", "price", "unitprice"]);
+              const stockRaw = pickValueByAliases(row, ["ton", "tonkho", "soluong", "sl", "stock", "quantity", "qty"]);
+              const note = pickValueByAliases(row, ["ghichu", "note", "mota", "description"]);
+              const price = Number(String(priceRaw).replace(/[^\d.-]/g, ""));
+              const stock = Number(String(stockRaw).replace(/[^\d.-]/g, ""));
+
+              if (!String(name).trim() || Number.isNaN(price)) return null;
+
+              return {
+                id: Date.now() + index,
+                name: String(name).trim(),
+                price,
+                stock: Number.isNaN(stock) ? 0 : stock,
+                note: String(note || "").trim()
+              };
+            })
+            .filter(Boolean);
+
+          if (!parsedProducts.length) {
+            setMessage("Không tìm thấy dòng sản phẩm hợp lệ trong file Excel");
+            event.target.value = "";
+            return;
+          }
+
+          setData((prev) => ({
+            ...prev,
+            products: excelImportMode === "replace" ? parsedProducts : [...parsedProducts, ...prev.products]
+          }));
+
+          setMessage(`Đã import ${parsedProducts.length} sản phẩm từ Excel`);
+        } catch (error) {
+          console.error(error);
+          setMessage("Đọc file Excel thất bại");
+        }
+
+        if (excelInputRef.current) excelInputRef.current.value = "";
+      };
+
+      const handleCustomerExcelFile = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!window.XLSX) {
+          setMessage("Chưa tải được thư viện đọc Excel");
+          event.target.value = "";
+          return;
+        }
+
+        try {
+          const rows = await readWorkbookRows(file);
+
+          const parsedCustomers = rows
+            .map((row, index) => {
+              const name = pickValueByAliases(row, ["tenkhach", "tenkhachhang", "khachhang", "hoten", "ten", "customer", "customername", "name"]);
+              const phone = pickValueByAliases(row, ["sdt", "sodienthoai", "dienthoai", "phone", "mobile", "tel"]);
+              const address = pickValueByAliases(row, ["diachi", "address", "noio", "noigiao"]);
+              const note = pickValueByAliases(row, ["ghichu", "note", "ghichukhach", "description"]);
+              const code = pickValueByAliases(row, ["makh", "customercode", "code", "idkhach"]);
+
+              if (!String(name).trim()) return null;
+
+              const noteParts = [
+                String(phone || "").trim() ? `SĐT: ${String(phone).trim()}` : "",
+                String(address || "").trim() ? `Địa chỉ: ${String(address).trim()}` : "",
+                String(code || "").trim() ? `Mã KH: ${String(code).trim()}` : "",
+                String(note || "").trim()
+              ].filter(Boolean);
+
+              return {
+                id: Date.now() + index,
+                name: String(name).trim(),
+                note: noteParts.join(" | ")
+              };
+            })
+            .filter(Boolean);
+
+          if (!parsedCustomers.length) {
+            setMessage("Không tìm thấy dòng khách hàng hợp lệ trong file Excel");
+            event.target.value = "";
+            return;
+          }
+
+          setData((prev) => ({
+            ...prev,
+            customers: customerImportMode === "replace" ? parsedCustomers : [...parsedCustomers, ...prev.customers]
+          }));
+
+          setMessage(`Đã import ${parsedCustomers.length} khách hàng từ Excel`);
+        } catch (error) {
+          console.error(error);
+          setMessage("Đọc file Excel khách hàng thất bại");
+        }
+
+        if (customerExcelInputRef.current) customerExcelInputRef.current.value = "";
+      };
+
+      const addToCart = () => {
+        if (!selectingItem) return;
+        const qty = Math.max(1, Number(inputQty || 1));
+        const { finalPrice, discountPercent } = getPriceInfo(selectingItem.price, inputNote);
+        setCart((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            productId: selectingItem.id,
+            name: selectingItem.name,
+            qty,
+            note: inputNote.trim(),
+            originalPrice: Number(selectingItem.price),
+            appliedPrice: Number(finalPrice),
+            discountPercent
+          }
+        ]);
+        setSelectingItem(null);
+        setInputQty(1);
+        setInputNote("");
+        setMessage("Đã thêm vào đơn");
+      };
+
+      const mapOrderItemsToCart = (items = []) =>
+        items.map((item, index) => ({
+          ...item,
+          id: Date.now() + index,
+          productId: item.productId || item.id || null,
+          name: item.name,
+          qty: Number(item.qty || 1),
+          note: item.note || "",
+          originalPrice: Number(item.originalPrice ?? item.appliedPrice ?? 0),
+          appliedPrice: Number(item.appliedPrice ?? item.originalPrice ?? 0),
+          discountPercent: Number(item.discountPercent || 0)
+        }));
+
+      const resetOrderForm = () => {
+        setCart([]);
+        setCustomer("Khách lẻ");
+        setOrderNote("");
+        setEditingOrderId(null);
+      };
+
+      const loadOrderToForm = (sale, mode = "copy") => {
+        if (!sale) return;
+        setCart(mapOrderItemsToCart(sale.items));
+        setCustomer(sale.customer || "Khách lẻ");
+        setOrderNote(sale.note || "");
+        setEditingOrderId(mode === "edit" ? sale.id : null);
+        setView("pos");
+        setShowBill(false);
+        setBillImg(null);
+        setPreviewOrder(null);
+        setMessage(mode === "edit" ? `Đang sửa đơn ${orderCode(sale.id)}` : `Đã copy đơn ${orderCode(sale.id)}`);
+      };
+
+      const copyOrder = (sale) => {
+        loadOrderToForm(sale, "copy");
+      };
+
+      const editOrder = (sale) => {
+        loadOrderToForm(sale, "edit");
+      };
+
+      const cancelEditOrder = () => {
+        resetOrderForm();
+        setMessage("Đã hủy sửa đơn");
+      };
+
+      const renderBillImage = async () => {
+        setLoadingBill(true);
+        setBillImg(null);
+        setShowBill(true);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        const canvas = await html2canvas(receiptRef.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+        setBillImg(canvas.toDataURL("image/png"));
+        setLoadingBill(false);
+      };
+
+      const saveOrder = async () => {
+        if (!cart.length) return;
+        const baseOrder = editingOrder || null;
+        const savedOrder = {
+          id: baseOrder?.id || Date.now(),
+          customer: customer.trim() || "Khách lẻ",
+          note: orderNote.trim(),
+          total: totalAmount,
+          date: baseOrder?.date || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          items: cart.map((item) => ({ ...item }))
+        };
+        setData((prev) => ({
+          ...prev,
+          sales: editingOrderId
+            ? prev.sales.map((sale) => (sale.id === editingOrderId ? savedOrder : sale))
+            : [...prev.sales, savedOrder]
+        }));
+        setPreviewOrder(savedOrder);
+        await renderBillImage();
+        resetOrderForm();
+        setMessage(editingOrderId ? "Đã cập nhật đơn hàng" : "Đã lưu đơn hàng");
+      };
+
+      const viewHistory = async (sale) => {
+        setPreviewOrder(sale);
+        await renderBillImage();
+      };
+
+      const closeBill = () => {
+        setShowBill(false);
+        setBillImg(null);
+        setPreviewOrder(null);
+      };
+
+      const exportData = () => {
+        const content = JSON.stringify({ data, settings }, null, 2);
+        navigator.clipboard.writeText(content)
+          .then(() => setMessage("Đã copy dữ liệu JSON"))
+          .catch(() => setMessage("Không thể copy, hãy dùng ô nhập bên dưới"));
+      };
+
+      const importData = () => {
+        try {
+          const parsed = JSON.parse(importText);
+          if (parsed.data) {
+            setData(parsed.data);
+            if (parsed.settings) setSettings(parsed.settings);
+          } else {
+            setData(parsed);
+          }
+          setImportText("");
+          setMessage("Đã import dữ liệu");
+        } catch {
+          setMessage("JSON không hợp lệ");
+        }
+      };
+
+      const readJsonSafe = async (response) => {
+        const text = await response.text();
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch {
+          throw new Error("Apps Script trả về dữ liệu không đúng JSON");
+        }
+      };
+
+      const normalizeRemoteBundle = (payload) => {
+        const remote = payload?.data || payload || {};
+        return {
+          products: Array.isArray(remote.products) ? remote.products : [],
+          customers: Array.isArray(remote.customers) ? remote.customers : [],
+          sales: Array.isArray(remote.sales) ? remote.sales : [],
+          settings: payload?.settings || remote.settings || null
+        };
+      };
+
+      const requireAppsScriptUrl = () => {
+        if (appsScriptUrl) return true;
+        setView("settings");
+        setMessage("Hãy nhập URL Web App của Apps Script trước");
+        return false;
+      };
+
+      const fetchFromGoogleSheets = async () => {
+        if (!requireAppsScriptUrl()) return false;
+        setSyncingGoogle(true);
+        try {
+          const url = `${appsScriptUrl}${appsScriptUrl.includes("?") ? "&" : "?"}action=getAll`;
+          const response = await fetch(url, { method: "GET" });
+          const result = await readJsonSafe(response);
+          if (!response.ok) throw new Error(result?.message || "Không đọc được dữ liệu từ Apps Script");
+
+          const remoteBundle = normalizeRemoteBundle(result);
+          const hasRemoteData = remoteBundle.products.length || remoteBundle.customers.length || remoteBundle.sales.length;
+          if (!hasRemoteData) throw new Error(result?.message || "Google Sheets chưa có dữ liệu hợp lệ");
+
+          setData({
+            products: remoteBundle.products,
+            customers: remoteBundle.customers,
+            sales: remoteBundle.sales
+          });
+
+          if (remoteBundle.settings) {
+            setSettings((prev) => ({ ...prev, ...remoteBundle.settings, appsScriptUrl: prev.appsScriptUrl || appsScriptUrl }));
+          }
+
+          setLastGoogleSync(new Date().toLocaleString("vi-VN"));
+          setMessage("Đã tải dữ liệu từ Google Sheets");
+          return true;
+        } catch (error) {
+          console.error(error);
+          setMessage(error.message || "Kết nối Google Sheets thất bại");
+          return false;
+        } finally {
+          setSyncingGoogle(false);
+        }
+      };
+
+      const pushToGoogleSheets = async () => {
+        if (!requireAppsScriptUrl()) return false;
+        setSyncingGoogle(true);
+        try {
+          const response = await fetch(appsScriptUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "pushAll",
+              data,
+              settings: {
+                storeName: settings.storeName,
+                subtitle: settings.subtitle,
+                address: settings.address,
+                phone: settings.phone
+              }
+            })
+          });
+          const result = await readJsonSafe(response);
+          if (!response.ok) throw new Error(result?.message || "Không đẩy được dữ liệu lên Google Sheets");
+
+          setLastGoogleSync(new Date().toLocaleString("vi-VN"));
+          setMessage(result?.message || "Đã đẩy dữ liệu lên Google Sheets");
+          return true;
+        } catch (error) {
+          console.error(error);
+          setMessage(error.message || "Đồng bộ Google Sheets thất bại");
+          return false;
+        } finally {
+          setSyncingGoogle(false);
+        }
+      };
+
+      const syncGoogleSheetsTwoWay = async () => {
+        if (!requireAppsScriptUrl()) return;
+        const pushed = await pushToGoogleSheets();
+        if (!pushed) return;
+        await fetchFromGoogleSheets();
+      };
+
+      const downloadBill = () => {
+        if (!billImg) return;
+        const link = document.createElement("a");
+        link.href = billImg;
+        link.download = `hoa-don-${Date.now()}.png`;
+        link.click();
+      };
+
+      const currentOrder = previewOrder || {
+        customer,
+        note: orderNote,
+        total: totalAmount,
+        date: new Date().toISOString(),
+        items: cart
+      };
+
+      return (
+        <div className="max-w-md mx-auto h-screen bg-slate-50 text-slate-900 relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-sky-100 to-transparent pointer-events-none"></div>
+
+          <header className="relative z-10 px-5 pt-5 pb-3">
+            <div className="glass-card px-5 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <img src={APP_LOGO} alt="Logo App Lên Đơn" className="app-logo" />
+                <div className="min-w-0">
+                  <div className="text-xl font-black tracking-tight text-sky-700 truncate">{APP_NAME}</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-black truncate">{settings.storeName}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="inline-flex items-center gap-2 bg-sky-50 text-sky-600 rounded-full px-3 py-2 text-[11px] font-black">
+                  <SyncIcon />
+                  {settings.subtitle || "Bán hàng thông minh"}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-2 font-bold">{message}</div>
+              </div>
+            </div>
+          </header>
+
+          <main className="relative z-10 h-[calc(100vh-160px)] overflow-y-auto pb-44 px-5 no-scrollbar">
+            {view === "pos" && (
+              <div className="space-y-5 animate-up">
+                <section className="space-y-3">
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Khách hàng</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[10px] font-bold w-24 outline-none focus:border-sky-400"
+                        placeholder="Tìm..."
+                        value={searchCust}
+                        onChange={(e) => setSearchCust(e.target.value)}
+                      />
+                      <button onClick={() => setShowAddCust(true)} className="w-7 h-7 bg-sky-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-sky-200">
+                        <PlusIcon />
+                      </button>
+                    </div>
+                  </div>
+
+                  {searchCust && (
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {matchedCustomers.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setCustomer(c.name);
+                            setOrderNote(c.note || "");
+                            setSearchCust("");
+                          }}
+                          className="px-3 py-2 glass-card text-[10px] font-black whitespace-nowrap bg-sky-50 text-sky-700"
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="glass-card p-4">
+                    <input
+                      className="w-full font-black text-slate-700 outline-none text-lg bg-transparent"
+                      value={customer}
+                      onChange={(e) => setCustomer(e.target.value)}
+                      placeholder="Tên khách hàng..."
+                    />
+                    <textarea
+                      className="w-full text-xs text-slate-400 font-bold outline-none bg-transparent mt-1 resize-none"
+                      rows="2"
+                      value={orderNote}
+                      onChange={(e) => setOrderNote(e.target.value)}
+                      placeholder="Ghi chú khách / SĐT / yêu cầu giao hàng..."
+                    />
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Sản phẩm</span>
+                    <button onClick={() => setShowAddProd(true)} className="w-7 h-7 bg-sky-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-sky-200">
+                      <PlusIcon />
+                    </button>
+                  </div>
+
+                  <input
+                    className="w-full bg-white border border-slate-200 rounded-2xl py-3 px-5 text-sm font-bold shadow-sm outline-none focus:border-sky-400"
+                    placeholder="Tìm sản phẩm..."
+                    value={searchProd}
+                    onChange={(e) => setSearchProd(e.target.value)}
+                  />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {filteredProducts.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setSelectingItem(p);
+                          setInputQty(1);
+                          setInputNote("");
+                        }}
+                        className="glass-card p-4 text-left btn-press"
+                      >
+                        <div className="text-[10px] font-black text-slate-400 uppercase truncate mb-1">{p.name}</div>
+                        <div className="text-slate-900 font-black text-base italic">{currency(p.price)}</div>
+                        <div className="text-[10px] text-slate-400 font-bold mt-2">Tồn kho: {p.stock || 0}</div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Đơn hàng hiện tại ({cart.length})</span>
+                    <div className="flex items-center gap-3">
+                      {editingOrderId && (
+                        <button onClick={cancelEditOrder} className="text-[10px] font-black text-amber-600 uppercase">
+                          Hủy sửa
+                        </button>
+                      )}
+                      {!!cart.length && (
+                        <button onClick={() => setCart([])} className="text-[10px] font-black text-rose-500 uppercase">
+                          Xóa hết
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {editingOrderId && (
+                    <div className="glass-card p-3 bg-amber-50 border border-amber-200 text-[11px] font-black text-amber-700">
+                      Đang sửa đơn: {orderCode(editingOrderId)}
+                    </div>
+                  )}
+
+                  {cart.length === 0 ? (
+                    <div className="glass-card p-8 text-center text-xs italic text-slate-300 font-bold">Chưa có sản phẩm nào trong đơn</div>
+                  ) : (
+                    cart.map((item) => (
+                      <div key={item.id} className="glass-card p-4 flex justify-between items-center border-l-4 border-l-sky-500 animate-up">
+                        <div className="flex-1 min-w-0 pr-3">
+                          <div className="text-xs font-black uppercase truncate">{item.name}</div>
+                          <div className="text-[10px] font-black text-sky-500">
+                            x{item.qty} {item.discountPercent > 0 ? `(Giảm ${item.discountPercent}%)` : ""}
+                          </div>
+                          {item.note && <div className="text-[10px] text-slate-400 italic whitespace-pre-wrap mt-1">{item.note}</div>}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm font-black">{currency(item.appliedPrice * item.qty)}</div>
+                          <button onClick={() => setCart((prev) => prev.filter((x) => x.id !== item.id))} className="text-slate-300 hover:text-rose-500 p-1">
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </section>
+              </div>
+            )}
+
+            {view === "report" && (
+              <div className="space-y-5 animate-up">
+                <section className="grid grid-cols-4 gap-2">
+                  {[
+                    ["today", "Ngày"],
+                    ["month", "Tháng"],
+                    ["year", "Năm"],
+                    ["custom", "Tùy chọn"]
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setReportFilter(value)}
+                      className={`py-2 rounded-xl text-[10px] font-black border ${reportFilter === value ? "bg-sky-600 text-white border-sky-600 shadow-lg shadow-sky-100" : "bg-white text-slate-500 border-slate-200"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </section>
+
+                {reportFilter === "custom" && (
+                  <div className="grid grid-cols-2 gap-2 animate-up">
+                    <input
+                      type="date"
+                      className="p-3 text-xs border border-slate-200 rounded-xl outline-none font-bold"
+                      value={customDate.start}
+                      onChange={(e) => setCustomDate((prev) => ({ ...prev, start: e.target.value }))}
+                    />
+                    <input
+                      type="date"
+                      className="p-3 text-xs border border-slate-200 rounded-xl outline-none font-bold"
+                      value={customDate.end}
+                      onChange={(e) => setCustomDate((prev) => ({ ...prev, end: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                <section className="bg-gradient-to-br from-sky-600 via-cyan-600 to-indigo-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
+                  <div className="relative z-10">
+                    <p className="text-[10px] font-black uppercase opacity-70 tracking-[0.3em]">Tổng doanh thu</p>
+                    <h2 className="text-4xl font-black italic mt-2 tracking-tight">{currency(filteredStats.total)}</h2>
+                    <div className="grid grid-cols-2 gap-3 mt-5">
+                      <div className="bg-white/10 rounded-2xl p-3">
+                        <div className="text-[10px] uppercase opacity-70 font-black">Số đơn</div>
+                        <div className="text-2xl font-black mt-1">{filteredStats.count}</div>
+                      </div>
+                      <div className="bg-white/10 rounded-2xl p-3">
+                        <div className="text-[10px] uppercase opacity-70 font-black">Sản phẩm bán</div>
+                        <div className="text-2xl font-black mt-1">{filteredStats.itemsSold}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="absolute -top-10 -right-8 w-32 h-32 rounded-full bg-white/10 blur-2xl"></div>
+                </section>
+
+                <section className="glass-card p-4 space-y-3">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Sản phẩm bán chạy</div>
+                  {topProducts.length === 0 ? (
+                    <div className="text-xs italic text-slate-400">Chưa có dữ liệu trong bộ lọc hiện tại.</div>
+                  ) : (
+                    topProducts.map(([name, qty], index) => (
+                      <div key={name} className="flex items-center justify-between bg-slate-50 rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-[10px] font-black">{index + 1}</div>
+                          <div className="text-sm font-black truncate">{name}</div>
+                        </div>
+                        <div className="text-xs font-black text-slate-500">{qty} sp</div>
+                      </div>
+                    ))
+                  )}
+                </section>
+
+                <section className="space-y-3">
+                  {filteredStats.data.slice().reverse().map((sale) => (
+                    <div key={sale.id} className="glass-card p-4 flex justify-between items-center animate-up">
+                      <div className="flex-1 min-w-0 pr-3">
+                        <div className="text-[11px] font-black uppercase truncate">{sale.customer}</div>
+                        <div className="text-[9px] text-slate-400 font-bold">{new Date(sale.date).toLocaleString("vi-VN")}</div>
+                        <div className="text-[9px] text-slate-400 italic mt-1 truncate">
+                          {sale.items.map((item) => `${item.name} x${item.qty}`).join(", ")}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-sm font-black text-sky-600">{currency(sale.total)}</div>
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          <button onClick={() => copyOrder(sale)} className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-black uppercase tracking-tight btn-press">
+                            Copy
+                          </button>
+                          <button onClick={() => editOrder(sale)} className="px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-[9px] font-black uppercase tracking-tight btn-press">
+                            Sửa
+                          </button>
+                          <button onClick={() => viewHistory(sale)} className="flex items-center gap-1 px-2 py-1 bg-sky-50 text-sky-600 rounded-lg text-[9px] font-black uppercase tracking-tight btn-press">
+                            <EyeIcon /> Xem
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredStats.data.length === 0 && (
+                    <div className="glass-card p-8 text-center text-xs italic text-slate-300 font-bold">Chưa có đơn hàng trong bộ lọc này</div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {view === "settings" && (
+              <div className="space-y-5 animate-up">
+                <section className="glass-card p-5 space-y-4">
+                  <h3 className="font-black text-slate-800 text-lg">Thông tin cửa hàng</h3>
+                  <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Tên cửa hàng" value={settings.storeName} onChange={(e) => setSettings((prev) => ({ ...prev, storeName: e.target.value }))} />
+                  <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Dòng mô tả" value={settings.subtitle} onChange={(e) => setSettings((prev) => ({ ...prev, subtitle: e.target.value }))} />
+                  <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Địa chỉ" value={settings.address} onChange={(e) => setSettings((prev) => ({ ...prev, address: e.target.value }))} />
+                  <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Số điện thoại" value={settings.phone} onChange={(e) => setSettings((prev) => ({ ...prev, phone: e.target.value }))} />
+                </section>
+
+                <section className="glass-card p-5 space-y-4">
+                  <h3 className="font-black text-slate-800 text-lg">Google Sheets / Apps Script</h3>
+                  <input
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold"
+                    placeholder="Dán URL Web App Apps Script..."
+                    value={settings.appsScriptUrl || ""}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, appsScriptUrl: e.target.value }))}
+                  />
+                  <div className="text-[11px] text-slate-500 font-bold leading-5">
+                    Dùng cho kết nối hai chiều với Google Sheets. Apps Script cần hỗ trợ `action=getAll` để đọc dữ liệu và `action=pushAll` để ghi dữ liệu.
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={fetchFromGoogleSheets}
+                      disabled={syncingGoogle}
+                      className="bg-white border border-slate-200 text-slate-900 font-black py-3 rounded-2xl text-xs uppercase tracking-widest disabled:opacity-50"
+                    >
+                      Tải từ Sheets
+                    </button>
+                    <button
+                      onClick={pushToGoogleSheets}
+                      disabled={syncingGoogle}
+                      className="bg-sky-600 text-white font-black py-3 rounded-2xl text-xs uppercase tracking-widest disabled:opacity-50"
+                    >
+                      Đẩy lên Sheets
+                    </button>
+                  </div>
+                  <button
+                    onClick={syncGoogleSheetsTwoWay}
+                    disabled={syncingGoogle}
+                    className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {syncingGoogle ? "Đang đồng bộ..." : "Đồng bộ 2 chiều"}
+                  </button>
+                  <div className="text-[11px] text-slate-400 font-bold">
+                    {lastGoogleSync ? `Lần đồng bộ gần nhất: ${lastGoogleSync}` : "Chưa có lần đồng bộ nào"}
+                  </div>
+                </section>
+
+                <section className="glass-card p-5 space-y-4">
+                  <h3 className="font-black text-slate-800 text-lg">Quản lý dữ liệu local</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={refreshDemo} className="bg-slate-900 text-white font-black py-3 rounded-2xl text-xs uppercase tracking-widest">Nạp dữ liệu mẫu</button>
+                    <button onClick={exportData} className="bg-sky-600 text-white font-black py-3 rounded-2xl text-xs uppercase tracking-widest">Copy JSON</button>
+                  </div>
+                  <textarea
+                    className="w-full h-36 p-4 bg-slate-50 rounded-2xl text-[11px] border border-slate-200 font-mono outline-none focus:border-sky-400"
+                    placeholder="Dán JSON vào đây để import dữ liệu..."
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                  />
+                  <button onClick={importData} className="w-full bg-white border border-slate-200 text-slate-900 font-black py-4 rounded-2xl text-xs uppercase tracking-widest">
+                    Import dữ liệu
+                  </button>
+                </section>
+
+                <section className="glass-card p-5 space-y-4">
+                  <h3 className="font-black text-slate-800 text-lg">Nhập khách hàng từ Excel</h3>
+                  <div className="text-[11px] text-slate-500 font-bold leading-5">
+                    Hỗ trợ file <span className="text-sky-600">.xlsx</span>, <span className="text-sky-600">.xls</span>, <span className="text-sky-600">.csv</span>.
+                    Cột nên có: <span className="text-slate-700">Tên khách</span>, <span className="text-slate-700">SĐT</span>, <span className="text-slate-700">Địa chỉ</span>, <span className="text-slate-700">Ghi chú</span>.
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setCustomerImportMode("append")}
+                      className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border ${customerImportMode === "append" ? "bg-sky-600 text-white border-sky-600" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      Thêm nối
+                    </button>
+                    <button
+                      onClick={() => setCustomerImportMode("replace")}
+                      className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border ${customerImportMode === "replace" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      Thay thế hết
+                    </button>
+                  </div>
+                  <input
+                    ref={customerExcelInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleCustomerExcelFile}
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold file:mr-3 file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:rounded-xl file:text-white file:font-black"
+                  />
+                  <div className="text-[11px] text-slate-400 font-bold">
+                    App sẽ đọc sheet đầu tiên và tự map các cột phổ biến như `Tên khách / customer`, `SĐT / phone`, `Địa chỉ / address`, `Ghi chú / note`.
+                  </div>
+                </section>
+
+                <section className="glass-card p-5 space-y-4">
+                  <h3 className="font-black text-slate-800 text-lg">Nhập sản phẩm từ Excel</h3>
+                  <div className="text-[11px] text-slate-500 font-bold leading-5">
+                    Hỗ trợ file <span className="text-sky-600">.xlsx</span>, <span className="text-sky-600">.xls</span>, <span className="text-sky-600">.csv</span>.
+                    Cột nên có: <span className="text-slate-700">Tên sản phẩm</span>, <span className="text-slate-700">Giá</span>, <span className="text-slate-700">Tồn kho</span>, <span className="text-slate-700">Ghi chú</span>.
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setExcelImportMode("append")}
+                      className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border ${excelImportMode === "append" ? "bg-sky-600 text-white border-sky-600" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      Thêm nối
+                    </button>
+                    <button
+                      onClick={() => setExcelImportMode("replace")}
+                      className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border ${excelImportMode === "replace" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      Thay thế hết
+                    </button>
+                  </div>
+                  <input
+                    ref={excelInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleExcelFile}
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold file:mr-3 file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:rounded-xl file:text-white file:font-black"
+                  />
+                  <div className="text-[11px] text-slate-400 font-bold">
+                    App sẽ đọc sheet đầu tiên của file và tự map các cột phổ biến như `Tên sản phẩm / name`, `Giá / price`, `Tồn kho / stock`.
+                  </div>
+                </section>
+
+                <section className="glass-card p-5 space-y-3">
+                  <div className="text-sm font-black">Tổng quan dữ liệu</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-50 rounded-2xl p-4">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Sản phẩm</div>
+                      <div className="text-2xl font-black mt-1">{products.length}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Khách</div>
+                      <div className="text-2xl font-black mt-1">{customers.length}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4">
+                      <div className="text-[10px] font-black uppercase text-slate-400">Đơn</div>
+                      <div className="text-2xl font-black mt-1">{sales.length}</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+          </main>
+
+          <nav className="bottom-nav fixed bottom-0 inset-x-0 max-w-md mx-auto px-4 py-4 pb-8 flex justify-around items-center z-50 rounded-t-[2.5rem]">
+            <button onClick={() => setView("pos")} className={`nav-item flex flex-col items-center gap-1 ${view === "pos" ? "active-tab" : "text-slate-600"}`}>
+              <HomeIcon />
+              <span className="text-[10px] font-black uppercase tracking-[0.04em]">Bán hàng</span>
+            </button>
+            <button onClick={() => setView("report")} className={`nav-item flex flex-col items-center gap-1 ${view === "report" ? "active-tab" : "text-slate-600"}`}>
+              <ChartIcon />
+              <span className="text-[10px] font-black uppercase tracking-[0.04em]">Báo cáo</span>
+            </button>
+            <button onClick={() => setView("settings")} className={`nav-item flex flex-col items-center gap-1 ${view === "settings" ? "active-tab" : "text-slate-600"}`}>
+              <SettingIcon />
+              <span className="text-[10px] font-black uppercase tracking-[0.04em]">Cài đặt</span>
+            </button>
+          </nav>
+
+          {view === "pos" && totalAmount > 0 && (
+            <div className="fixed bottom-28 inset-x-5 max-w-md mx-auto z-40">
+              <button onClick={saveOrder} className="w-full bg-slate-900 text-white p-5 rounded-3xl shadow-2xl flex justify-between items-center btn-press">
+                <div className="text-left pl-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase block tracking-widest mb-0.5">
+                    {editingOrderId ? "Cập nhật đơn" : "Tổng thanh toán"}
+                  </span>
+                  <span className="text-2xl font-black italic tracking-tight">{currency(totalAmount)}</span>
+                </div>
+                <div className="bg-sky-600 px-6 py-2 rounded-full font-black text-xs uppercase shadow-lg shadow-sky-500/20">
+                  {editingOrderId ? "Cập nhật" : "Lưu đơn"}
+                </div>
+              </button>
+            </div>
+          )}
+
+          {showAddCust && (
+            <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center p-6 animate-up">
+              <div className="bg-white w-full max-w-md mx-auto rounded-3xl p-6 space-y-4 shadow-2xl">
+                <h3 className="font-black text-lg">Thêm khách hàng</h3>
+                <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Tên khách hàng" value={newCust.name} onChange={(e) => setNewCust((prev) => ({ ...prev, name: e.target.value }))} />
+                <textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Ghi chú / SĐT" rows="3" value={newCust.note} onChange={(e) => setNewCust((prev) => ({ ...prev, note: e.target.value }))}></textarea>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowAddCust(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs">Hủy</button>
+                  <button onClick={addCustomer} className="flex-1 px-8 bg-sky-600 text-white font-black rounded-2xl shadow-lg uppercase text-xs">Lưu khách</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showAddProd && (
+            <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-center p-6 animate-up">
+              <div className="bg-white w-full max-w-md mx-auto rounded-3xl p-6 space-y-4 shadow-2xl">
+                <h3 className="font-black text-lg">Thêm sản phẩm</h3>
+                <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" placeholder="Tên sản phẩm" value={newProd.name} onChange={(e) => setNewProd((prev) => ({ ...prev, name: e.target.value }))} />
+                <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" type="number" placeholder="Giá bán" value={newProd.price} onChange={(e) => setNewProd((prev) => ({ ...prev, price: e.target.value }))} />
+                <input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold" type="number" placeholder="Tồn kho" value={newProd.stock} onChange={(e) => setNewProd((prev) => ({ ...prev, stock: e.target.value }))} />
+                <div className="flex gap-2">
+                  <button onClick={() => setShowAddProd(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-xs">Hủy</button>
+                  <button onClick={addProduct} className="flex-1 px-8 bg-sky-600 text-white font-black rounded-2xl shadow-lg uppercase text-xs">Thêm sản phẩm</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectingItem && (
+            <div className="fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm flex items-end p-4" onClick={() => setSelectingItem(null)}>
+              <div className="bg-white w-full max-w-md mx-auto rounded-[2.5rem] p-6 space-y-5 animate-up shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="text-center">
+                  <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{selectingItem.name}</h3>
+                  <p className="text-sky-600 font-bold">{currency(selectingItem.price)}</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <button onClick={() => setInputQty(Math.max(1, Number(inputQty) - 1))} className="w-12 h-12 bg-white rounded-xl shadow-sm text-2xl font-bold text-sky-600">-</button>
+                    <div className="text-center">
+                      <span className="text-[9px] font-black text-slate-400 uppercase block mb-1">Số lượng</span>
+                      <input type="number" className="w-20 bg-transparent text-center text-3xl font-black outline-none border-b-2 border-sky-200 focus:border-sky-500" value={inputQty} onChange={(e) => setInputQty(e.target.value)} />
+                    </div>
+                    <button onClick={() => setInputQty(Number(inputQty) + 1)} className="w-12 h-12 bg-white rounded-xl shadow-sm text-2xl font-bold text-sky-600">+</button>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black text-slate-400 uppercase ml-2">Ghi chú và chiết khấu</span>
+                    <textarea className="w-full p-4 bg-slate-50 rounded-2xl text-sm font-bold border border-slate-200 outline-none focus:border-sky-500" rows="3" placeholder="Ví dụ: tặng hộp quà, giảm 10%" value={inputNote} onChange={(e) => setInputNote(e.target.value)}></textarea>
+                  </div>
+                </div>
+                <button onClick={addToCart} className="w-full bg-sky-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-sky-200">Xác nhận</button>
+              </div>
+            </div>
+          )}
+
+          {showBill && (
+            <div className="fixed inset-0 z-[200] bg-slate-950/95 flex flex-col items-center justify-center p-6">
+              {loadingBill || !billImg ? (
+                <div className="text-white font-black animate-pulse">Đang tạo hóa đơn...</div>
+              ) : (
+                <div className="w-full max-w-sm flex flex-col gap-4 animate-up">
+                  <div className="bg-white rounded-3xl overflow-hidden shadow-2xl">
+                    <img src={billImg} className="w-full h-auto" alt="Hóa đơn" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={downloadBill} className="w-full bg-white text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest text-xs">Tải ảnh</button>
+                    <button onClick={closeBill} className="w-full bg-sky-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs">Đóng</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="fixed -left-[9999px] top-0">
+            <div ref={receiptRef} className="receipt-paper w-[760px] min-h-[1200px] px-10 py-10">
+              <div className="receipt-rings">
+                {Array.from({ length: 13 }).map((_, i) => <div key={i} className="receipt-ring"></div>)}
+              </div>
+
+              <div className="receipt-flower tl">✦ ❀</div>
+              <div className="receipt-flower tr">❀ ✦</div>
+              <div className="receipt-flower bl">✿</div>
+              <div className="receipt-flower br">✿</div>
+
+              <div className="relative z-10">
+                <div className="text-center pt-1">
+                  <div className="text-[26px] font-black uppercase ink-title tracking-tight">
+                    {[settings.storeName, settings.address].filter(Boolean).join(" - ")}
+                  </div>
+                  <div className="mt-4 receipt-sep"></div>
+                  <h1 className="text-[42px] font-black uppercase ink-title mt-6">Đơn hàng</h1>
+                  <div className="text-[22px] ink-subtle mt-3 font-bold">
+                    {orderCode(currentOrder.id)} - {new Date(currentOrder.date).toLocaleString("vi-VN")}
+                  </div>
+                </div>
+
+                <div className="mt-8 text-[24px] ink-title">
+                  <div className="py-1">
+                    Khách: <span className="font-black">{currentOrder.customer || "Khách lẻ"}</span>
+                  </div>
+                  <div className="py-1">
+                    Ghi chú:
+                    <div className="receipt-note-block mt-1">
+                      {currentOrder.note || "........................................"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 receipt-sep"></div>
+
+                <div className="grid grid-cols-[140px_1fr_1fr] text-[20px] ink-title py-3 font-black">
+                  <div className="font-bold">SL</div>
+                  <div className="font-bold text-center">Đơn giá</div>
+                  <div className="font-bold text-right">T.Tiền</div>
+                </div>
+
+                <div className="receipt-sep"></div>
+
+                <div className="mt-2">
+                  {currentOrder.items.map((item, index) => (
+                    <div key={item.id} className="py-4">
+                      <div className="text-[22px] font-bold uppercase leading-tight ink-title">
+                        {index + 1}. {item.name}
+                      </div>
+                      {item.discountPercent > 0 && (
+                        <div className="text-[16px] ink-subtle mt-1 font-bold">
+                          Giảm giá {item.discountPercent}% - còn {moneyText(item.appliedPrice)}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-[140px_1fr_1fr] text-[20px] ink-subtle mt-3 font-bold items-end">
+                        <div>x{item.qty}</div>
+                        <div className="text-center">{moneyText(item.originalPrice)}</div>
+                        <div className="text-right">{moneyText(item.appliedPrice * item.qty)}</div>
+                      </div>
+                      {item.note && <div className="text-[18px] mt-2 font-black ink-title">Ghi chú: {item.note}</div>}
+                      <div className="receipt-dotted mt-2"></div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 receipt-sep"></div>
+
+                <div className="flex justify-between items-end py-4 ink-title">
+                  <div className="text-[28px] font-black">Tổng cộng</div>
+                  <div className="text-[46px] font-black">{moneyText(currentOrder.total || 0)}</div>
+                </div>
+
+                <div className="receipt-sep"></div>
+
+                <div className="text-center mt-10 pb-2 ink-title">
+                  <div className="text-[22px] uppercase leading-tight font-black">
+                    Chúc Quý Khách Hàng
+                    <br />
+                    Mua May Bán Đắt
+                  </div>
+                  <div className="text-[16px] ink-subtle mt-4 font-bold">{settings.phone}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
